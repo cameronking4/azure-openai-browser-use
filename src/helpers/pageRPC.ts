@@ -22,20 +22,25 @@ type MethodRT<T extends MethodName> = ReturnType<RPCMethods[T]>;
 export const callRPC = async <T extends MethodName>(
   type: keyof typeof rpcMethods,
   payload?: Payload<T>,
-  maxTries = 1
+  maxTries = 3
 ): Promise<MethodRT<T>> => {
-  let queryOptions = { active: true, currentWindow: true };
-  let activeTab = (await chrome.tabs.query(queryOptions))[0];
-
-  // If the active tab is a chrome-extension:// page, then we need to get some random other tab for testing
-  if (activeTab.url?.startsWith('chrome')) {
-    queryOptions = { active: false, currentWindow: true };
-    activeTab = (await chrome.tabs.query(queryOptions))[0];
-  }
+  const queryOptions = { active: true, currentWindow: true };
+  const activeTab = (await chrome.tabs.query(queryOptions))[0];
 
   if (!activeTab?.id) throw new Error('No active tab found');
 
-  let err: any;
+  // Ensure content script is injected if not already
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: activeTab.id },
+      files: ['contentScript.bundle.js'],
+    });
+  } catch (e) {
+    // Script may already be injected, continue
+    console.debug('Content script injection:', e);
+  }
+
+  let err: unknown;
   for (let i = 0; i < maxTries; i++) {
     try {
       const response = await chrome.tabs.sendMessage(activeTab.id, {
@@ -44,13 +49,18 @@ export const callRPC = async <T extends MethodName>(
       });
       return response;
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
       if (i === maxTries - 1) {
-        // Last try, throw the error
-        err = e;
+        // Last try, throw a more descriptive error
+        err = new Error(
+          `Failed to establish connection after ${maxTries} attempts. Content script may not be loaded. Original error: ${errorMessage}`
+        );
       } else {
-        // Content script may not have loaded, retry
-        console.error(e);
-        await sleep(1000);
+        // Content script may not have loaded, retry after delay
+        console.warn(
+          `Connection attempt ${i + 1}/${maxTries} failed, retrying in 1s...`
+        );
+        await sleep(3000);
       }
     }
   }

@@ -14,7 +14,7 @@ export default function RunTaskButton(props: { runTask: () => void }) {
     <Button
       rightIcon={<Icon as={BsPlayFill} boxSize={6} />}
       onClick={props.runTask}
-      colorScheme="green"
+      colorScheme="blue"
       disabled={state.taskState === 'running' || !state.instructions}
     >
       Start Task

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Taxy AI Alpha",
+  "name": "Azure Portal Demo",
   "description": "A chrome extension that executes DOM actions to fulfill natural language commands on any website",
   "version": "1.1.0",
   "options_page": "options.html",
@@ -11,7 +11,8 @@
     "storage",
     "clipboardWrite",
     "debugger",
-    "management"
+    "management",
+    "scripting"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -22,7 +23,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://*/*", "https://*/*", "<all_urls>"],
+      "matches": ["http://*/*", "https://*/*"],
       "js": ["contentScript.bundle.js"],
       "css": ["content.styles.css"]
     }

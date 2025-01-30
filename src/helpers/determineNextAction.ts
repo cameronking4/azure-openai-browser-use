@@ -1,7 +1,7 @@
-import OpenAI from 'openpipe/openai';
 import { useAppState } from '../state/store';
 import { availableActions } from './availableActions';
 import { ParsedResponseSuccess } from './parseResponse';
+import { AzureOpenAI } from 'openai';
 
 const formattedActions = availableActions
   .map((action, i) => {
@@ -38,18 +38,19 @@ export async function determineNextAction(
   const model = useAppState.getState().settings.selectedModel;
   const prompt = formatPrompt(taskInstructions, previousActions, simplifiedDOM);
   const openAIKey = useAppState.getState().settings.openAIKey;
-  const openPipeKey = useAppState.getState().settings.openPipeKey;
+
   if (!openAIKey) {
     notifyError?.('No OpenAI key found');
     return null;
   }
 
-  const openai = new OpenAI({
-    apiKey: openAIKey,
+  const openai = new AzureOpenAI({
+    baseURL:
+      process.env.AZURE_OPENAI_BASE_URL ??
+      'https://azure-openai-demo.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2024-08-01-preview',
+    apiKey: process.env.AZURE_OPENAI_API_KEY ?? openAIKey,
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? '2024-08-01-preview',
     dangerouslyAllowBrowser: true,
-    openpipe: {
-      apiKey: openPipeKey ?? undefined,
-    },
   });
 
   for (let i = 0; i < maxAttempts; i++) {
@@ -67,7 +68,6 @@ export async function determineNextAction(
         reasoning_effort: model === 'o1' ? 'low' : undefined,
         temperature: model === 'o1' ? undefined : 0,
         stop: ['</Action>'],
-        store: openPipeKey ? true : false,
       });
 
       return {
@@ -75,16 +75,16 @@ export async function determineNextAction(
         prompt,
         response: completion.choices[0].message?.content?.trim() + '</Action>',
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('determineNextAction error', error);
-      if (error.message.includes('server error')) {
+      if (error instanceof Error && error.message.includes('server error')) {
         // Problem with the OpenAI API, try again
         if (notifyError) {
           notifyError(error.message);
         }
       } else {
         // Another error, give up
-        throw new Error(error.message);
+        throw new Error(error instanceof Error ? error.message : String(error));
       }
     }
   }
